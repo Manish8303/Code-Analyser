@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Code Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom dark theme for the code editor */
+        textarea {
+            background-color: #1a202c; /* A dark shade */
+            color: #e2e8f0; /* Light gray text */
+            border: 1px solid #4a5568; /* A subtle border */
+            font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
+            resize: vertical; /* Allow vertical resizing */
+        }
+        .report-box {
+            background-color: #2d3748;
+            color: #cbd5e0;
+            white-space: pre-wrap; /* Preserve whitespace and wrap text */
+            font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-8">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-4xl">
+        <h1 class="text-3xl font-bold mb-6 text-center text-indigo-400">Automated Code Analyzer</h1>
+        
+        <div class="mb-4">
+            <label for="language-selector" class="block text-sm font-medium mb-2">Select Language:</label>
+            <select id="language-selector" class="w-full p-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                <option value="cpp">C++</option>
+                <option value="python">Python</option>
+            </select>
+        </div>
+        
+        <div class="mb-4">
+            <label for="code-input" class="block text-sm font-medium mb-2">Enter your code here:</label>
+            <textarea id="code-input" rows="15" class="w-full p-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"></textarea>
+        </div>
+        
+        <div class="text-center">
+            <button id="analyze-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                Analyze Code
+            </button>
+        </div>
+        
+        <div id="results" class="mt-8">
+            <div class="bg-gray-700 text-gray-300 p-4 rounded-lg border border-gray-600">
+                <p class="text-center">Your analysis results will appear here after you click "Analyze Code".</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const analyzeButton = document.getElementById('analyze-button');
+            const codeInput = document.getElementById('code-input');
+            const resultsDiv = document.getElementById('results');
+            const languageSelector = document.getElementById('language-selector');
+
+            analyzeButton.addEventListener('click', async () => {
+                const code = codeInput.value;
+                const language = languageSelector.value;
+                
+                if (!code) {
+                    resultsDiv.innerHTML = '<div class="bg-red-900 text-white p-4 rounded-lg mt-4"><p class="text-center">Please enter some code to analyze.</p></div>';
+                    return;
+                }
+
+                // Show a loading message
+                resultsDiv.innerHTML = '<div class="bg-gray-700 text-gray-300 p-4 rounded-lg mt-4"><p class="text-center animate-pulse">Analyzing code... please wait.</p></div>';
+                analyzeButton.disabled = true;
+
+                try {
+                    const response = await fetch('http://127.0.0.1:5000/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ code: code, language: language })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        resultsDiv.innerHTML = `<div class="bg-red-900 text-white p-4 rounded-lg mt-4"><pre>${data.report || 'An error occurred.'}</pre></div>`;
+                        return;
+                    }
+                    
+                    let htmlContent = `
+                        <div class="bg-gray-700 text-gray-300 p-4 rounded-lg report-box mb-4">
+                            <h3 class="text-xl font-bold mb-2 text-indigo-300">Static Analysis Report</h3>
+                            <pre>${data.static_report}</pre>
+                        </div>
+                    `;
+
+                    // Add ML report only if it's C++
+                    if (data.quality_label) {
+                        const qualityColor = data.quality_label === 'Good' ? 'text-green-400' : 'text-yellow-400';
+                        htmlContent += `
+                            <div class="bg-gray-700 text-gray-300 p-4 rounded-lg report-box mb-4">
+                                <h3 class="text-xl font-bold mb-2 text-indigo-300">Code Quality Prediction</h3>
+                                <p><strong>Quality Score:</strong> <span class="${qualityColor}">${(data.quality_score * 100).toFixed(2)}%</span> (Higher is better)</p>
+                                <p><strong>Prediction:</strong> <span class="${qualityColor}">${data.quality_label}</span></p>
+                            </div>
+                        `;
+                    }
+
+                    // Add suggestions
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        htmlContent += `
+                            <div class="bg-gray-700 text-gray-300 p-4 rounded-lg report-box">
+                                <h3 class="text-xl font-bold mb-2 text-indigo-300">Suggestions for Improvement</h3>
+                                <ul class="list-disc list-inside">
+                                    ${data.suggestions.map(s => `<li>${s}</li>`).join('')}
+                                </ul>
+                            </div>
+                        `;
+                    }
+                    
+                    resultsDiv.innerHTML = htmlContent;
+
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="bg-red-900 text-white p-4 rounded-lg mt-4"><p class="text-center">Connection error. Is the Flask server running?</p></div>`;
+                    console.error('Error:', error);
+                } finally {
+                    analyzeButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
