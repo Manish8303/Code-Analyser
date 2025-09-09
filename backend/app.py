@@ -73,4 +73,4 @@ def analyze_code():
 
 if __name__ == '__main__':
     # Use a temporary port to avoid conflicts
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', debug=True, port=5000)
